@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { parseExport } from "@/lib/parseExport";
+import { kmeans } from "@/lib/clientKmeans";
 
 // Reads a fetch Response safely. If the server returned an empty body, a
 // timeout page, or non-JSON, this returns a readable error instead of
@@ -71,18 +72,45 @@ export default function UploadPage() {
         console.warn(`${errors.length} chats failed:`, errors);
       }
 
-      setStatus(`Summarized ${processed} of ${conversations.length} chats. Grouping into themes...`);
+      setStatus(`Summarized ${processed} of ${conversations.length} chats. Fetching data for grouping...`);
       setProgress(75);
 
-      const assignRes = await fetch("/api/cluster/assign", {
+      const embRes = await fetch("/api/embeddings");
+      const embData = await safeJson(embRes);
+
+      if (embData.error || !embData.conversations) {
+        setStatus(`Error while fetching data for grouping: ${embData.error || "unknown"}`);
+        setBusy(false);
+        return;
+      }
+
+      const allConvos = embData.conversations as { id: string; title: string; embedding: number[] }[];
+
+      setStatus("Grouping your chats into themes...");
+      setProgress(82);
+
+      const k = Math.max(3, Math.round(allConvos.length / 8));
+      const assignments = kmeans(
+        allConvos.map((c) => c.embedding),
+        k
+      );
+
+      const groups: { label: string; memberIds: string[] }[] = [];
+      for (let i = 0; i < k; i++) {
+        const members = allConvos.filter((_, idx) => assignments[idx] === i);
+        if (members.length === 0) continue;
+        groups.push({ label: members[0].title, memberIds: members.map((m) => m.id) });
+      }
+
+      const saveRes = await fetch("/api/cluster/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ groups }),
       });
-      const assignData = await safeJson(assignRes);
+      const assignData = await safeJson(saveRes);
 
       if (assignData.error) {
-        setStatus(`Error while grouping: ${assignData.error}`);
+        setStatus(`Error while saving groups: ${assignData.error}`);
         setBusy(false);
         return;
       }
