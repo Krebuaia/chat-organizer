@@ -4,6 +4,21 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { parseExport } from "@/lib/parseExport";
 
+// Reads a fetch Response safely. If the server returned an empty body, a
+// timeout page, or non-JSON, this returns a readable error instead of
+// throwing "Unexpected end of JSON input" and killing the whole run.
+async function safeJson(res: Response): Promise<{ error?: string; [key: string]: unknown }> {
+  const text = await res.text();
+  if (!text) {
+    return { error: `Empty response (HTTP ${res.status}). The request likely timed out.` };
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: `Non-JSON response (HTTP ${res.status}): ${text.slice(0, 150)}` };
+  }
+}
+
 export default function UploadPage() {
   const [status, setStatus] = useState<string>("");
   const [busy, setBusy] = useState(false);
@@ -35,9 +50,10 @@ export default function UploadPage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(conversations[i]),
           });
-          const data = await res.json();
+          const data = await safeJson(res);
           if (data.error) errors.push(`${conversations[i].title}: ${data.error}`);
-          else processed++;
+          else if (!data.skipped) processed++;
+          else processed++; // already-ingested chats still count toward completion
         } catch (err) {
           errors.push(`${conversations[i].title}: ${(err as Error).message}`);
         }
@@ -63,7 +79,7 @@ export default function UploadPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
-      const assignData = await assignRes.json();
+      const assignData = await safeJson(assignRes);
 
       if (assignData.error) {
         setStatus(`Error while grouping: ${assignData.error}`);
@@ -72,16 +88,27 @@ export default function UploadPage() {
       }
 
       const clusters = assignData.clusters as { id: string; label: string }[];
+      const synthesisErrors: string[] = [];
 
       for (let i = 0; i < clusters.length; i++) {
         setStatus(`Writing summary ${i + 1} of ${clusters.length} themes...`);
         setProgress(75 + Math.round((i / clusters.length) * 25));
 
-        await fetch("/api/cluster/synthesize", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ clusterId: clusters[i].id }),
-        });
+        try {
+          const res = await fetch("/api/cluster/synthesize", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ clusterId: clusters[i].id }),
+          });
+          const data = await safeJson(res);
+          if (data.error) synthesisErrors.push(`${clusters[i].label}: ${data.error}`);
+        } catch (err) {
+          synthesisErrors.push(`${clusters[i].label}: ${(err as Error).message}`);
+        }
+      }
+
+      if (synthesisErrors.length > 0) {
+        console.warn(`${synthesisErrors.length} theme summaries failed:`, synthesisErrors);
       }
 
       setProgress(100);

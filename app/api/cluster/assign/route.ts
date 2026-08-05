@@ -45,17 +45,13 @@ export async function POST(req: NextRequest) {
 
   const { data: conversations, error } = await supabase
     .from("co_conversations")
-    .select("id, title");
-  const { data: withEmbeddings } = await supabase
-    .from("co_conversations")
-    .select("id, embedding");
+    .select("id, title, embedding");
 
   if (error || !conversations || conversations.length === 0) {
     return NextResponse.json({ error: "No conversations found. Run ingest first." }, { status: 400 });
   }
 
-  const embeddingById = new Map((withEmbeddings || []).map((c) => [c.id, c.embedding as unknown as number[]]));
-  const embeddings = conversations.map((c) => embeddingById.get(c.id)!);
+  const embeddings = conversations.map((c) => c.embedding as unknown as number[]);
 
   const k = Math.min(targetClusters || Math.max(3, Math.round(conversations.length / 6)), conversations.length);
   const assignments = kmeans(embeddings, k);

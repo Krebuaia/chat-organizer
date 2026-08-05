@@ -6,7 +6,7 @@ const anthropic = new Anthropic({
 
 // Turns one raw conversation into a short summary + any standalone ideas it contains.
 export async function summarizeConversation(rawText: string) {
-  const truncated = rawText.slice(0, 30000); // keep each call cheap and fast
+  const truncated = rawText.slice(0, 12000); // keep each call fast enough to avoid function timeouts
 
   const message = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
