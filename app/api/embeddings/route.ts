@@ -10,5 +10,12 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ conversations: data });
+  // pgvector columns come back from Supabase as a text string like "[0.1,-0.2,...]",
+  // not a real array, so this needs to be parsed before it can be used for math.
+  const conversations = (data || []).map((c) => ({
+    ...c,
+    embedding: typeof c.embedding === "string" ? JSON.parse(c.embedding) : c.embedding,
+  }));
+
+  return NextResponse.json({ conversations });
 }
