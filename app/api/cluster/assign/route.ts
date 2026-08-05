@@ -53,35 +53,50 @@ export async function POST(req: NextRequest) {
 
   const embeddings = conversations.map((c) => c.embedding as unknown as number[]);
 
-  const k = Math.min(targetClusters || Math.max(3, Math.round(conversations.length / 6)), conversations.length);
+  const k = Math.min(targetClusters || Math.max(3, Math.round(conversations.length / 8)), conversations.length);
   const assignments = kmeans(embeddings, k);
 
   // Clear old clusters before creating new ones
   await supabase.from("co_clusters").delete().neq("id", "00000000-0000-0000-0000-000000000000");
 
-  const clusterResults = [];
-
+  // Build the member list per cluster first (no DB calls yet)
+  const groups: { label: string; members: { id: string }[] }[] = [];
   for (let i = 0; i < k; i++) {
     const members = conversations.filter((_, idx) => assignments[idx] === i);
     if (members.length === 0) continue;
-
-    const { data: cluster } = await supabase
-      .from("co_clusters")
-      .insert({
-        label: members[0].title,
-        synthesis: "",
-        conversation_count: members.length,
-      })
-      .select()
-      .single();
-
-    await supabase
-      .from("co_conversations")
-      .update({ cluster_id: cluster!.id })
-      .in("id", members.map((m) => m.id));
-
-    clusterResults.push({ id: cluster!.id, label: cluster!.label });
+    groups.push({ label: members[0].title, members });
   }
+
+  // One batch insert for all clusters, instead of one insert per cluster
+  const { data: insertedClusters, error: insertError } = await supabase
+    .from("co_clusters")
+    .insert(
+      groups.map((g) => ({
+        label: g.label,
+        synthesis: "",
+        conversation_count: g.members.length,
+      }))
+    )
+    .select();
+
+  if (insertError || !insertedClusters) {
+    return NextResponse.json({ error: `Failed to create clusters: ${insertError?.message}` }, { status: 500 });
+  }
+
+  // All the cluster_id updates run concurrently instead of one-at-a-time
+  await Promise.all(
+    groups.map((g, i) =>
+      supabase
+        .from("co_conversations")
+        .update({ cluster_id: insertedClusters[i].id })
+        .in("id", g.members.map((m) => m.id))
+    )
+  );
+
+  const clusterResults = groups.map((g, i) => ({
+    id: insertedClusters[i].id,
+    label: insertedClusters[i].label,
+  }));
 
   return NextResponse.json({ clusters: clusterResults });
 }
