@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { parseExport } from "@/lib/parseExport";
 
 export default function UploadPage() {
   const [status, setStatus] = useState<string>("");
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
   const router = useRouter();
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -18,35 +20,61 @@ export default function UploadPage() {
     try {
       const text = await file.text();
       const json = JSON.parse(text);
+      const conversations = parseExport(json);
 
-      setStatus("Summarizing your conversations with Claude (this can take a few minutes for 100 chats)...");
-      const ingestRes = await fetch("/api/ingest", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(json),
-      });
-      const ingestData = await ingestRes.json();
+      const errors: string[] = [];
+      let processed = 0;
 
-      if (ingestData.errors?.length) {
-        setStatus(`Processed ${ingestData.processed}/${ingestData.total}, with ${ingestData.errors.length} errors. Continuing to clustering...`);
-      } else {
-        setStatus(`Processed ${ingestData.processed}/${ingestData.total} conversations. Now grouping into themes...`);
+      for (let i = 0; i < conversations.length; i++) {
+        setStatus(`Summarizing chat ${i + 1} of ${conversations.length}...`);
+        setProgress(Math.round((i / conversations.length) * 70)); // ingest = first 70% of the bar
+
+        try {
+          const res = await fetch("/api/ingest", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(conversations[i]),
+          });
+          const data = await res.json();
+          if (data.error) errors.push(`${conversations[i].title}: ${data.error}`);
+          else processed++;
+        } catch (err) {
+          errors.push(`${conversations[i].title}: ${(err as Error).message}`);
+        }
       }
 
-      const clusterRes = await fetch("/api/cluster", {
+      setStatus("Grouping your chats into themes...");
+      setProgress(75);
+
+      const assignRes = await fetch("/api/cluster/assign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
-      const clusterData = await clusterRes.json();
+      const assignData = await assignRes.json();
 
-      if (clusterData.error) {
-        setStatus(`Error while clustering: ${clusterData.error}`);
+      if (assignData.error) {
+        setStatus(`Error while grouping: ${assignData.error}`);
         setBusy(false);
         return;
       }
 
-      setStatus(`Done! Found ${clusterData.clusters.length} themes. Taking you there now...`);
+      const clusters = assignData.clusters as { id: string; label: string }[];
+
+      for (let i = 0; i < clusters.length; i++) {
+        setStatus(`Writing summary ${i + 1} of ${clusters.length} themes...`);
+        setProgress(75 + Math.round((i / clusters.length) * 25));
+
+        await fetch("/api/cluster/synthesize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clusterId: clusters[i].id }),
+        });
+      }
+
+      setProgress(100);
+      const errorNote = errors.length ? ` (${errors.length} chats had issues and were skipped)` : "";
+      setStatus(`Done! Processed ${processed} chats into ${clusters.length} themes${errorNote}. Taking you there now...`);
       setTimeout(() => router.push("/clusters"), 1500);
     } catch (err) {
       setStatus(`Something went wrong: ${(err as Error).message}`);
@@ -59,7 +87,7 @@ export default function UploadPage() {
       <h1 className="text-2xl font-semibold mb-2">Upload your Claude export</h1>
       <p className="text-gray-600 mb-8">
         In claude.ai, go to Settings &gt; Privacy &gt; Export data. Once the email
-        arrives, unzip it and upload the .json file here.
+        arrives, unzip it and upload the conversations.json file here.
       </p>
 
       <label className="block border-2 border-dashed border-gray-300 rounded-lg p-10 text-center cursor-pointer hover:border-gray-400">
@@ -69,7 +97,16 @@ export default function UploadPage() {
         </span>
       </label>
 
-      {status && <p className="mt-6 text-sm text-gray-700">{status}</p>}
+      {progress !== null && (
+        <div className="w-full bg-gray-100 rounded-full h-2 mt-6">
+          <div
+            className="bg-black h-2 rounded-full transition-all"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      )}
+
+      {status && <p className="mt-4 text-sm text-gray-700">{status}</p>}
     </main>
   );
 }
