@@ -43,7 +43,19 @@ export default function UploadPage() {
         }
       }
 
-      setStatus("Grouping your chats into themes...");
+      if (processed === 0) {
+        setStatus(
+          `Nothing was saved. First error: ${errors[0] || "unknown"}. Fix this before trying again.`
+        );
+        setBusy(false);
+        return;
+      }
+
+      if (errors.length > 0) {
+        console.warn(`${errors.length} chats failed:`, errors);
+      }
+
+      setStatus(`Summarized ${processed} of ${conversations.length} chats. Grouping into themes...`);
       setProgress(75);
 
       const assignRes = await fetch("/api/cluster/assign", {

@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     const { topic, summary, ideas } = await summarizeConversation(convo.rawText);
     const embedding = await embedText(`${topic}. ${summary}`);
 
-    await supabase.from("co_conversations").insert({
+    const { error: insertError } = await supabase.from("co_conversations").insert({
       source_uuid: convo.sourceUuid,
       title: convo.title,
       raw_text: convo.rawText.slice(0, 50000),
@@ -33,6 +33,10 @@ export async function POST(req: NextRequest) {
       created_at: convo.createdAt,
       embedding,
     });
+
+    if (insertError) {
+      return NextResponse.json({ error: `Database insert failed: ${insertError.message}` }, { status: 500 });
+    }
 
     return NextResponse.json({ processed: true });
   } catch (err) {
