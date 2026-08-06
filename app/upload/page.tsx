@@ -3,7 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { parseExport } from "@/lib/parseExport";
+import { parseChatGPTExport } from "@/lib/parseChatGPTExport";
 import { kmeans } from "@/lib/clientKmeans";
+
+// ChatGPT's export has a "mapping" field on each conversation; Claude's doesn't.
+function detectSource(json: unknown): "claude" | "chatgpt" {
+  const first = Array.isArray(json) ? json[0] : null;
+  return first && typeof first === "object" && "mapping" in first ? "chatgpt" : "claude";
+}
 
 // Reads a fetch Response safely. If the server returned an empty body, a
 // timeout page, or non-JSON, this returns a readable error instead of
@@ -36,7 +43,9 @@ export default function UploadPage() {
     try {
       const text = await file.text();
       const json = JSON.parse(text);
-      const conversations = parseExport(json);
+      const source = detectSource(json);
+      const conversations = source === "chatgpt" ? parseChatGPTExport(json) : parseExport(json);
+      setStatus(`Detected a ${source === "chatgpt" ? "ChatGPT" : "Claude"} export with ${conversations.length} chats...`);
 
       const errors: string[] = [];
       let processed = 0;
@@ -151,10 +160,12 @@ export default function UploadPage() {
 
   return (
     <main className="max-w-xl mx-auto mt-24 px-6">
-      <h1 className="text-2xl font-semibold mb-2">Upload your Claude export</h1>
+      <h1 className="text-2xl font-semibold mb-2">Upload your export</h1>
       <p className="text-gray-600 mb-8">
-        In claude.ai, go to Settings &gt; Privacy &gt; Export data. Once the email
-        arrives, unzip it and upload the conversations.json file here.
+        Works with both Claude and ChatGPT exports, it&apos;s auto-detected. For
+        Claude: Settings &gt; Privacy &gt; Export data. For ChatGPT: Settings &gt;
+        Data controls &gt; Export data. Unzip the email and upload the
+        conversations.json file here.
       </p>
 
       <label className="block border-2 border-dashed border-gray-300 rounded-lg p-10 text-center cursor-pointer hover:border-gray-400">

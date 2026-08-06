@@ -9,7 +9,7 @@ export default async function ClusterDetailPage({ params }: { params: Promise<{ 
   const { data: cluster } = await supabase.from("co_clusters").select("*").eq("id", id).single();
   const { data: conversations } = await supabase
     .from("co_conversations")
-    .select("id, title, summary, ideas")
+    .select("id, title, summary, ideas, source, attachment_count")
     .eq("cluster_id", id);
 
   if (!cluster) {
@@ -35,7 +35,19 @@ export default async function ClusterDetailPage({ params }: { params: Promise<{ 
       <div className="grid gap-3">
         {conversations?.map((c) => (
           <div key={c.id} className="border border-gray-200 rounded-lg p-4">
-            <h3 className="font-medium text-sm">{c.title}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-medium text-sm">{c.title}</h3>
+              <span
+                className={`text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded ${
+                  c.source === "chatgpt" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"
+                }`}
+              >
+                {c.source === "chatgpt" ? "ChatGPT" : "Claude"}
+              </span>
+              {c.attachment_count > 0 && (
+                <span className="text-[10px] text-gray-400">{c.attachment_count} attachment(s)</span>
+              )}
+            </div>
             <p className="text-sm text-gray-600 mt-1">{c.summary}</p>
             {c.ideas && (
               <p className="text-sm text-amber-700 mt-2">

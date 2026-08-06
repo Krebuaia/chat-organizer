@@ -32,6 +32,8 @@ export async function POST(req: NextRequest) {
       message_count: convo.messageCount,
       created_at: convo.createdAt,
       embedding,
+      source: convo.source || "claude",
+      attachment_count: convo.attachmentCount || 0,
     });
 
     if (insertError) {

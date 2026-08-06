@@ -8,6 +8,8 @@ type ParsedConversation = {
   rawText: string;
   messageCount: number;
   createdAt: string | null;
+  source: "claude";
+  attachmentCount: number;
 };
 
 export function parseExport(json: unknown): ParsedConversation[] {
@@ -41,6 +43,8 @@ export function parseExport(json: unknown): ParsedConversation[] {
         rawText,
         messageCount: messages.length,
         createdAt: (convo.created_at as string) || null,
+        source: "claude" as const,
+        attachmentCount: 0,
       };
     })
     .filter((c) => c.rawText.trim().length > 0);

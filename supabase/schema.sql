@@ -15,6 +15,8 @@ create table if not exists co_conversations (
   created_at timestamptz,
   embedding vector(1024),               -- Voyage embedding of the summary
   cluster_id uuid,
+  source text default 'claude',         -- 'claude' or 'chatgpt'
+  attachment_count int default 0,       -- how many files/images were attached, if any
   processed_at timestamptz default now()
 );
 
