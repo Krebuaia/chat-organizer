@@ -14,9 +14,14 @@ export default async function ClustersPage() {
     <main className="max-w-3xl mx-auto mt-16 px-6 pb-24">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-semibold">Your themes</h1>
-        <Link href="/upload" className="text-sm text-blue-600 hover:underline">
-          Upload more chats
-        </Link>
+        <div className="flex gap-4">
+          <Link href="/table" className="text-sm text-blue-600 hover:underline">
+            View as table
+          </Link>
+          <Link href="/upload" className="text-sm text-blue-600 hover:underline">
+            Upload more chats
+          </Link>
+        </div>
       </div>
 
       <RegroupControl />

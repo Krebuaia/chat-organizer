@@ -13,6 +13,7 @@ create table if not exists co_conversations (
   ideas text,                           -- any "idea nuggets" Claude pulled out
   message_count int,
   created_at timestamptz,
+  updated_at timestamptz,               -- when the chat was last added to
   embedding vector(1024),               -- Voyage embedding of the summary
   cluster_id uuid,
   source text default 'claude',         -- 'claude' or 'chatgpt'

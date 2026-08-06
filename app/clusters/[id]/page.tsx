@@ -3,13 +3,25 @@ import { supabase } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
+function formatDateRange(createdAt: string | null, updatedAt: string | null) {
+  if (!createdAt) return null;
+  const start = new Date(createdAt);
+  const startStr = start.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+
+  if (!updatedAt) return startStr;
+  const end = new Date(updatedAt);
+  const endStr = end.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+
+  return startStr === endStr ? startStr : `${startStr} – ${endStr}`;
+}
+
 export default async function ClusterDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
   const { data: cluster } = await supabase.from("co_clusters").select("*").eq("id", id).single();
   const { data: conversations } = await supabase
     .from("co_conversations")
-    .select("id, title, summary, ideas, source, attachment_count")
+    .select("id, title, summary, ideas, source, attachment_count, created_at, updated_at")
     .eq("cluster_id", id);
 
   if (!cluster) {
@@ -46,6 +58,9 @@ export default async function ClusterDetailPage({ params }: { params: Promise<{ 
               </span>
               {c.attachment_count > 0 && (
                 <span className="text-[10px] text-gray-400">{c.attachment_count} attachment(s)</span>
+              )}
+              {formatDateRange(c.created_at, c.updated_at) && (
+                <span className="text-[10px] text-gray-400">{formatDateRange(c.created_at, c.updated_at)}</span>
               )}
             </div>
             <p className="text-sm text-gray-600 mt-1">{c.summary}</p>

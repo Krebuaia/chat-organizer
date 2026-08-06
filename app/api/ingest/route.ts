@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
       ideas,
       message_count: convo.messageCount,
       created_at: convo.createdAt,
+      updated_at: convo.updatedAt,
       embedding,
       source: convo.source || "claude",
       attachment_count: convo.attachmentCount || 0,

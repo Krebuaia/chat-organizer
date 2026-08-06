@@ -33,19 +33,36 @@ export default function UploadPage() {
   const [progress, setProgress] = useState<number | null>(null);
   const router = useRouter();
 
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
     setBusy(true);
-    setStatus("Reading your export file...");
+    setStatus(`Reading ${files.length} file(s)...`);
 
     try {
-      const text = await file.text();
-      const json = JSON.parse(text);
-      const source = detectSource(json);
-      const conversations = source === "chatgpt" ? parseChatGPTExport(json) : parseExport(json);
-      setStatus(`Detected a ${source === "chatgpt" ? "ChatGPT" : "Claude"} export with ${conversations.length} chats...`);
+      type Parsed = {
+        sourceUuid: string;
+        title: string;
+        rawText: string;
+        messageCount: number;
+        createdAt: string | null;
+        source: "claude" | "chatgpt";
+        attachmentCount: number;
+      };
+      let conversations: Parsed[] = [];
+
+      for (let f = 0; f < files.length; f++) {
+        const file = files[f];
+        setStatus(`Reading file ${f + 1} of ${files.length} (${file.name})...`);
+        const text = await file.text();
+        const json = JSON.parse(text);
+        const source = detectSource(json);
+        const parsed = source === "chatgpt" ? parseChatGPTExport(json) : parseExport(json);
+        conversations = conversations.concat(parsed);
+      }
+
+      setStatus(`Found ${conversations.length} total chats across ${files.length} file(s)...`);
 
       const errors: string[] = [];
       let processed = 0;
@@ -62,8 +79,7 @@ export default function UploadPage() {
           });
           const data = await safeJson(res);
           if (data.error) errors.push(`${conversations[i].title}: ${data.error}`);
-          else if (!data.skipped) processed++;
-          else processed++; // already-ingested chats still count toward completion
+          else processed++; // covers both freshly processed and already-ingested (skipped) chats
         } catch (err) {
           errors.push(`${conversations[i].title}: ${(err as Error).message}`);
         }
@@ -162,16 +178,17 @@ export default function UploadPage() {
     <main className="max-w-xl mx-auto mt-24 px-6">
       <h1 className="text-2xl font-semibold mb-2">Upload your export</h1>
       <p className="text-gray-600 mb-8">
-        Works with both Claude and ChatGPT exports, it&apos;s auto-detected. For
-        Claude: Settings &gt; Privacy &gt; Export data. For ChatGPT: Settings &gt;
-        Data controls &gt; Export data. Unzip the email and upload the
-        conversations.json file here.
+        Works with Claude and ChatGPT exports, auto-detected per file. You can
+        select multiple files at once, e.g. if your export was split into
+        several conversations-XXX.json files. For Claude: Settings &gt; Privacy
+        &gt; Export data. For ChatGPT: Settings &gt; Data controls &gt; Export
+        data.
       </p>
 
       <label className="block border-2 border-dashed border-gray-300 rounded-lg p-10 text-center cursor-pointer hover:border-gray-400">
-        <input type="file" accept=".json" className="hidden" onChange={handleFile} disabled={busy} />
+        <input type="file" accept=".json" multiple className="hidden" onChange={handleFiles} disabled={busy} />
         <span className="text-gray-500">
-          {busy ? "Processing..." : "Click to choose your conversations.json file"}
+          {busy ? "Processing..." : "Click to choose one or more conversations.json files"}
         </span>
       </label>
 

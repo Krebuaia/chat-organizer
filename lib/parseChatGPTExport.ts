@@ -9,6 +9,7 @@ type ParsedConversation = {
   rawText: string;
   messageCount: number;
   createdAt: string | null;
+  updatedAt: string | null;
   source: "chatgpt";
   attachmentCount: number;
 };
@@ -77,6 +78,11 @@ export function parseChatGPTExport(json: unknown): ParsedConversation[] {
       rawText,
       messageCount: lines.length,
       createdAt: convo.create_time ? new Date((convo.create_time as number) * 1000).toISOString() : null,
+      updatedAt: convo.update_time
+        ? new Date((convo.update_time as number) * 1000).toISOString()
+        : convo.create_time
+          ? new Date((convo.create_time as number) * 1000).toISOString()
+          : null,
       source: "chatgpt",
       attachmentCount,
     });
