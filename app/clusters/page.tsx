@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import RegroupControl from "./RegroupControl";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,8 @@ export default async function ClustersPage() {
           Upload more chats
         </Link>
       </div>
+
+      <RegroupControl />
 
       {(!clusters || clusters.length === 0) && (
         <p className="text-gray-500">
